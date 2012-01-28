@@ -15,6 +15,7 @@
 , "devDependencies" : 
   { "mocha" : "*"
   , "socket.io" : "*"
+  , "async-array" : "*"
   }
 }
 

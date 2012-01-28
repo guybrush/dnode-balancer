@@ -109,11 +109,9 @@ function startDnode(conf, setRoutes, cb) {
         routes.byConn[conn.id].push(id)
         routes.byRoute[currRoute] = routes.byRoute[currRoute] || []
         routes.byRoute[currRoute].push(id)
-        if (routes.byRoute[currRoute] > 2) {
-          routes.byRoute[currRoute].push(id)
+        if (routes.byRoute[currRoute].length > 2) {
           var currRoutes = _.uniq(routes.byRoute[currRoute])
           var newRoutes = []
-          currRoutes.push(id)
           for (var i=0;i<10;i++) {
             currRoutes.map(function(x){
               if (i%~~(10/routes.byId[x].weight)==0)
@@ -140,7 +138,8 @@ function startDnode(conf, setRoutes, cb) {
     conn.on('remote',function(remote){})
     conn.on('end',function(){
       _.each(routes.byConn[conn.id],function(id){
-        self.del(id)
+        if (routes.byId[id] && !routes.byId[id].permanent)
+          self.del(id)
       })
       delete routes.byConn[conn.id]
       setRoutes(routes)
@@ -191,6 +190,7 @@ function startBalancer(conf, cb) {
     var host = req.headers.host
     if (~~host.indexOf(':')) 
       host = host.split(':')[0]
+    
     if (routes.byRoute[host]) {
       sumRequests[host] = sumRequests[host] || 0
       var len = routes.byRoute[host].length
@@ -200,6 +200,7 @@ function startBalancer(conf, cb) {
                       , host : routes.byId[id].host 
                       // , buffer : req.buf
                       }
+      //console.log('handle request '+host,currProxy)
       proxy.proxyRequest(req, res, currProxy)
     } else {
       res.writeHead(502)

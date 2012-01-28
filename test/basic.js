@@ -4,9 +4,11 @@ var assert = require('assert')
   , dnode = require('dnode')
   , io = require('socket.io')
   , cp = require('child_process')
+  , AA = require('async-array')
   , balancerPort = Math.floor(Math.random() * 40000 + 10000)
   , dnodePort = Math.floor(Math.random() * 40000 + 10000)
   , errorMsg = 'not in routing-table'
+  , apps = {}
   
 describe('initializing', function(){
   var child = cp.spawn
@@ -17,6 +19,7 @@ describe('initializing', function(){
       , '-P', dnodePort
       , '-e', errorMsg
       ] )
+  process.on('exit', function(){process.kill(child.pid)})
   child.stderr.on('data',function(d){console.log('stderr:'+d)})
   child.stdout.on('data',function(d){console.log('stdout:'+d)})
   var dnodeServer
@@ -59,27 +62,56 @@ describe('initializing', function(){
         done()
       })
     })
-  })
-  describe('stopping the app', function(){
-    it('should not list the app anymore', function(done){
-      stopApp('A', function(err){
-        if (err) return done(err)
-        setTimeout(function(){
-          dnodeServer.ls(function(err,data){
-            assert.equal(Object.keys(data.byId).length,0)
-            done()
-          })
-        },100)
+    describe('stopping the app', function(){
+      it('should not list the app anymore', function(done){
+        stopApp('A', function(err){
+          if (err) return done(err)
+          setTimeout(function(){
+            dnodeServer.ls(function(err,data){
+              assert.equal(Object.keys(data.byId).length,0)
+              done()
+            })
+          },100)
+        })
       })
+    })
+  })
+  describe('starting multiple apps with the same route', function(){
+    var port = Math.floor(Math.random() * 40000 + 10000)
+    var route = 'foo.bar'
+    it('should distribute the requests properly', function(done){
+      new AA([['A',2],['B',2],['C',6]])
+        .map(function(x,i,next){
+          var port = Math.floor(Math.random() * 40000 + 10000)
+          startApp(x[0],port,route,x[1],next)
+        })
+        .done(function(err,data){
+          if (err) return done(err)
+          var requestsDone = 0
+          apps.A.server.on('request',requestDone)
+          apps.B.server.on('request',requestDone)
+          apps.C.server.on('request',requestDone)
+          function requestDone(){
+            if (++requestsDone == 100) {
+              assert.ok(apps.A.sumReq<=15)
+              assert.ok(apps.B.sumReq<=15)
+              assert.ok(apps.C.sumReq>=70)
+              done()
+            }  
+          }
+          var requestsTodo = []
+          for (var i=0;i<100;i++) sendRequest(route)
+        })
+        .exec()
     })
   })
 })
 
-var apps = {}
-
 function startApp(x, port, route, weight, cb){
   apps[x] = {}
+  apps[x].sumReq = 0
   apps[x].server = http.createServer(function(req,res){
+    apps[x].sumReq++
     res.end('this is server '+x)
   }).listen(port,function(){
     apps[x].client = dnode().connect(dnodePort,function(remote,conn){
@@ -97,11 +129,13 @@ function stopApp(x, cb) {
   apps[x].client.on('end',function(){
     apps[x].server.on('close',cb)
     apps[x].server.close()
+    delete apps[x]
   })
   apps[x].client.end()
 }
 
 function sendRequest(route, cb) {
+  cb = cb || function() {}
   var opts = 
     { method  : 'GET' 
     , host    : 'localhost'
