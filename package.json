@@ -3,11 +3,10 @@
 , "description" : "http-proxy with dnode-interface"
 , "bin" : "./bin/cli.js"
 , "scripts" : 
-  { "test" : "./node_modules/.bin/mocha test/*.js --ui tdd" 
+  { "test" : "./node_modules/.bin/mocha test/*.js --reporter spec" 
   }
 , "dependencies" : 
-  { "async-array" : "*"
-  , "dnode" : "*"
+  { "dnode" : "*"
   , "eventemitter2" : "*"
   , "http-proxy" : "*"
   , "optimist" : "*"

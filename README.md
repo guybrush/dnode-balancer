@@ -70,7 +70,7 @@ for now only this works:
       })
     }
 
-to try it out, copy the code from above and start it. 
-then run `curl http://localhost:9901 -H "Host:foo.bar.com"` - the output should 
+to try it out, copy the code from above and start it. then run 
+`curl http://localhost:9901/ -H "Host:foo.bar.com"` - the output should 
 be `hello world!`.
     

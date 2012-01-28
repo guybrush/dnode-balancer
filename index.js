@@ -20,6 +20,7 @@ function init(config, cb) {
   config.balancer      = config.balancer      || {}
   config.balancer.port = config.balancer.port || 8000
   config.balancer.host = config.balancer.host || '0.0.0.0'
+  config.balancer.errorMsg = config.balancer.errorMsg || 'not in routing-table'
   config.dnode         = config.dnode         || {}
   config.dnode.port    = config.dnode.port    || 3000
   config.dnode.host    = config.dnode.host    || '0.0.0.0'
@@ -82,12 +83,6 @@ function startDnode(conf, setRoutes, cb) {
   }
   var routes = {byId:{},byRoute:{},byConn:{}}
   var server = dnode(function(remote,conn){
-    conn.on('remote',function(remote){})
-    conn.on('end',function(){
-      routes.byRoute[currRoute] = _.without(routes[currRoute],conn.id)
-      delete routes.byId[conn.id]
-      setRoutes(routes)
-    })
     this.ls = function(cb){
       cb(null,routes)
     }
@@ -132,9 +127,24 @@ function startDnode(conf, setRoutes, cb) {
       }
     }
     this.update = function(){}
-    this.del = function(){}
+    this.del = function(id, cb){
+      var curr = routes.byId[id]
+      routes.byRoute[curr.route] = _.without(routes.byRoute[curr.route],id)
+      if (routes.byRoute[curr.route].length == 0)
+        delete routes.byRoute[curr.route]
+      delete routes.byId[id]
+    }
     this.subscribe = function(){}
     this.unsubscribe = function(){}
+    var self = this
+    conn.on('remote',function(remote){})
+    conn.on('end',function(){
+      _.each(routes.byConn[conn.id],function(id){
+        self.del(id)
+      })
+      delete routes.byConn[conn.id]
+      setRoutes(routes)
+    })
   })
   server.listen(opts)
   server.on('ready',function(){cb()})
@@ -173,6 +183,7 @@ function startBalancer(conf, cb) {
   })
   
   var sumRequests = {}
+  var errorMsg = conf.errorMsg
   
   function handleRequest(req, res) {
     // req.buf = httpProxy.buffer(req)
@@ -191,7 +202,8 @@ function startBalancer(conf, cb) {
                       }
       proxy.proxyRequest(req, res, currProxy)
     } else {
-      res.end('not in routing table')
+      res.writeHead(502)
+      res.end(errorMsg)
     }
   }
   
